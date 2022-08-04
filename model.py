@@ -1,202 +1,225 @@
 import os
 os.environ['KMP_DUPLICATE_LIB_OK'] = 'True'
 import gym
-import math
+
 import random
 import numpy as np
-import matplotlib
-import matplotlib.pyplot as plt
-from collections import namedtuple, deque
-from itertools import count
-from PIL import Image
+
+
 
 import torch
 import torch.nn as nn
 import torch.optim as optim
 import torch.nn.functional as F
-import torchvision.transforms as T
+from collections import namedtuple, deque
 
-
-
+#get environment
 env = gym.make('LunarLander-v2')
 
+#seeding enviornment to get repeatable results
+env.seed(0)
+
 class DQNModel(nn.Module):
+
     def __init__(self, state_size, action_size, seed):
-        self(DQNModel, self).__init__()
+        """
+        state_size: dimension of the state
+        action_size: dimension of each action
+        seed: random seed
+        """
+
+        super(DQNModel, self).__init__()
         self.seed = torch.manual_seed(seed)
-        self.fc1 = nn.Linear(state_size, 64)
-        self.fc2 = nn.Linear(64, 64)
-        self.fc3 = nn.Linear(64, action_size)
 
+        # # # # # # # # # # # # # # # # # #
+        # creating fully connected layers #
+        # # # # # # # # # # # # # # # # # #
+
+        #input layer that takes state_size
+        self.fc1 = nn.Linear(state_size, 512)
+        #hidden layer 1
+        self.fc2 = nn.Linear(512, 256)
+        #hidden layer 2
+        self.fc3 = nn.Linear(256, 128)
+        #hidden layer 3
+        self.fc4 = nn.Linear(128, 64)
+        #output layer that outputs action_size
+        self.fc5 = nn.Linear(64, action_size)
+    
     def forward(self, state):
+        """ zeroes negative values in each tensor after each layer and returns the final tensor """
         x = self.fc1(state)
-        x = F.relu(self.fc1(x))
-        x = F.relu(self.fc2(x))
-        
-        return self.fc3(x)
+        x = F.relu(x)
+        x = self.fc2(x)
+        x = F.relu(x)
+        x = self.fc3(x)
+        x = F.relu(x)
+        x = self.fc4(x)
+        x = F.relu(x)
 
-device = torch.device("cpu")
+        return self.fc5(x)
 
-Transition = namedtuple('Transition', ('state', 'action', 'next_state', 'reward'))
+
+
+BUFFER_SIZE = int(1e5)  # size of replay buffer
+BATCH_SIZE = 64         # size of batch
+GAMMA = 0.99            # discount factor
+TAU = 1e-3              # used for updating target net
+LR = 5e-4               # learning rate
+TARGET_UPDATE = 4       # frequency to update target net
+
+device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+
 
 class ReplayMemory:
+    """Replay Memory to save trained observation"""
 
-        
     def __init__(self, action_size, buffer_size, batch_size, seed):
-        #self.action_size = action_size
-        self.memory = deque([], maxlen=buffer_size)
-        #self.batch_size = batch_size
-        #self.seed = random.seed(seed)
-    
-    def push(self, *args):
-        self.memory.append(Transition(*args))
+        """
+        action_size: size of each action
+        buffer_size: max size of buffer
+        batch_size: size of training batch
+        seed: random see
+        """
 
-    def sample(self, batch_size):
-        return random.sample(self.memory, batch_size)
+        self.action_size = action_size
+        self.memory = deque(maxlen=buffer_size)  
+        self.batch_size = batch_size
+        self.transition = namedtuple("Transition", field_names=["state", "action", "reward", "next_state", "done"])
+        self.seed = random.seed(seed)
+    
+    def add(self, state, action, reward, next_state, done):
+        """Adding new transition to the replay memory"""
+        trans = self.transition(state, action, reward, next_state, done)
+        self.memory.append(trans)
+    
+    def sample(self):
+        """Randomly sample a batch of transitions"""
+
+        # # # # # # # # # # # # # # # # # # #
+        # !! No idea how this code works !! #
+        # # # # # # # # # # # # # # # # # # # 
+        transitions = random.sample(self.memory, k=self.batch_size)
+        states = torch.from_numpy(np.vstack([t.state for t in transitions if t is not None])).float().to(device)
+        actions = torch.from_numpy(np.vstack([t.action for t in transitions if t is not None])).long().to(device)
+        rewards = torch.from_numpy(np.vstack([t.reward for t in transitions if t is not None])).float().to(device)
+        next_states = torch.from_numpy(np.vstack([t.next_state for t in transitions if t is not None])).float().to(device)
+        dones = torch.from_numpy(np.vstack([t.done for t in transitions if t is not None]).astype(np.uint8)).float().to(device)
+  
+        return (states, actions, rewards, next_states, dones)
 
     def __len__(self):
+        """return size of memory"""
         return len(self.memory)
 
-BATCH_SIZE = 128
-GAMMA = 0.999
-EPS_START = 0.9
-EPS_END = 0.05
-EPS_DECAY = 200
-TARGET_UPDATE = 10
+class Agent():
+   
 
-a_size = env.action_space()
-s_size = env.obs_space()
-seed = random.seed(42)
-
-policy_net = DQNModel(s_size, a_size, seed).to(device)
-target_net = DQNModel(s_size, a_size, seed).to(device)
-target_net.load_state_dict(policy_net.state_dict())
-target_net.eval()
-
-optimizer = optim.RMSprop(policy_net.parameters())
-
-memory = ReplayMemory(buffer_size = 10000, seed = seed)
-
-steps_done = 0
-
-def select_action(Ssize, Asize, seed=random.seed(42)):
-    global steps_done
-    sample = random.random()
-    eps_threshold = EPS_END + (EPS_START - EPS_END) * math.exp(-1 * steps_done / EPS_DECAY)
-    steps_done += 1
-
-    if sample > eps_threshold:
-        with torch.no_grad():
-            return policy_net(Ssize, Asize, seed).max(1)[1].view(1,1)
-    else:
-        return torch.tensor([[random.randrange(a_size)]], device=device, dtype=torch.long)
-    
-    episode_durations = []
-
-episode_durations = []
-
-
-def plot_durations():
-    plt.figure(2)
-    plt.clf()
-    durations_t = torch.tensor(episode_durations, dtype=torch.float)
-    plt.title('Training...')
-    plt.xlabel('Episode')
-    plt.ylabel('Duration')
-    plt.plot(durations_t.numpy())
-    # Take 100 episode averages and plot them too
-    if len(durations_t) >= 100:
-        means = durations_t.unfold(0, 100, 1).mean(1).view(-1)
-        means = torch.cat((torch.zeros(99), means))
-        plt.plot(means.numpy())
-
-    plt.pause(0.001)  # pause a bit so that plots are updated
-    if is_ipython:
-        display.clear_output(wait=True)
-        display.display(plt.gcf())
-
-
-def optimize_model():
-    if len(memory) < BATCH_SIZE:
-        return 
-    transitions = memory.sample(BATCH_SIZE)
-    batch = Transition(*zip(*transitions))
-
-    non_final_mask = torch.tensor(tuple(map(lambda s: s is not None, batch.next_state)), device=device, dtype=torch.bool)
-    
-    non_final_next_states = torch.cat([s for s in batch.next_state if s is not None])
-
-    state_batch = torch.cat(batch.state)
-    action_batch = torch.cat(batch.action)
-    reward_batch = torch.cat(batch.reward)
-
-    state_action_values = policy_net(state_batch).gather(1, action_batch)
-
-    next_state_values = torch.zeros(BATCH_SIZE, device=device)
-    next_state_values[non_final_mask] = target_net(non_final_next_states).max(1)[0].detach()
-
-    expected_state_action_values = (next_state_values * GAMMA) + reward_batch
-
-    criterion = nn.SmoothL1Loss()
-    loss = criterion(state_action_values, expected_state_action_values.unsqueeze(1))
-
-    optimizer.zero_grad()
-    loss.backward()
-    for param in policy_net.parameters():
-        param.grad.data.clamp_(-1, 1)
-    optimizer.step()
-
-
-num_episodes = 50
-for i_episode in range(num_episodes):
-    # Initialize the environment and state
-    env.reset()
-    
-    lastState = env.obs_space()
-    lastAction = env.action_space()
-
-    currState = env.obs_space()
-    currAction = env.action_space()
-    
-    for t in count():
-        # Select and perform an action
-        action = select_action(currState, currAction)
-        _, reward, done, _ = env.step(action.item())
-        reward = torch.tensor([reward], device=device)
-
-        # Observe new state
+    def __init__(self, state_size, action_size, seed):
         
-        lastState = currState
-        lastAction = currAction
- 
-        currState = env.obs_space()
-        currAction = env.action_space()
+        self.state_size = state_size
+        self.action_size = action_size
+        self.seed = random.seed(seed)
 
-        if not done:
-            next_state = currState - currState
-            next_action = currAction - lastAction
+        
+        self.policy_net = DQNModel(state_size, action_size, seed).to(device)
+        self.target_net = DQNModel(state_size, action_size, seed).to(device)
+        self.optimizer = optim.Adam(self.policy_net.parameters(), lr=LR)
+
+       
+        self.memory = ReplayMemory(action_size, BUFFER_SIZE, BATCH_SIZE, seed)
+       
+        self.steps_done = 0
+    
+    def step(self, state, action, reward, next_state, done):
+        
+        self.memory.add(state, action, reward, next_state, done)
+        
+       
+        self.steps_done = (self.steps_done + 1) % TARGET_UPDATE
+        if self.steps_done == 0:
+            
+            if len(self.memory) > BATCH_SIZE:
+                transitions = self.memory.sample()
+                self.optimize(transitions, GAMMA)
+
+    def get_action(self, state, eps=0.):
+       
+        state = torch.from_numpy(state).float().unsqueeze(0).to(device)
+        self.policy_net.eval()
+        with torch.no_grad():
+            action_vals = self.policy_net(state)
+        self.policy_net.train()
+
+        
+        if random.random() > eps:
+            return np.argmax(action_vals.cpu().data.numpy())
         else:
-            next_state = None
-            next_action = None
+            return random.choice(np.arange(self.action_size))
 
-        # Store the transition in memory
-        memory.push(state, action, next_state, reward)
+    def optimize(self, transitions, gamma):
+        
+        states, actions, rewards, next_states, dones = transitions
 
-        # Move to the next state
-        state = next_state
+       
+        next_target = self.target_net(next_states).detach().max(1)[0].unsqueeze(1)
+       
+        target = rewards + gamma * next_target * (1 - dones)
+        
+        expect = self.policy_net(states).gather(1, actions)
+        
+   
+        loss = F.huber_loss(expect, target)
+        self.optimizer.zero_grad()
+        loss.backward()
+        self.optimizer.step()
 
-        # Perform one step of the optimization (on the policy network)
-        optimize_model()
-        if done:
-            episode_durations.append(t + 1)
-            plot_durations()
+       
+        self.update(self.policy_net, self.target_net, TAU)                     
+
+    def update(self, policyNN, targetNN, tau):
+      
+        for target_param, local_param in zip(targetNN.parameters(), policyNN.parameters()):
+            target_param.data.copy_(tau*local_param.data + (1.0-tau)*target_param.data)
+
+
+
+
+
+
+
+def train(num_episodes=2000, max_timesteps=1000, eps_start=1.0, eps_end=0.01, eps_decay=0.995):
+  
+    scores = []                       
+    scores_window = deque(maxlen=100) 
+    eps = eps_start                
+    show = False
+    for i in range(1, num_episodes+1):
+        state = env.reset()
+        score = 0
+    
+        
+        for t in range(max_timesteps):
+            if show == True:    
+                env.render()
+            action = agent.get_action(state, eps)
+            next_state, reward, done, _ = env.step(action)
+            agent.step(state, action, reward, next_state, done)
+            state = next_state
+            score += reward
+            if done:
+                break 
+        scores_window.append(score)      
+        scores.append(score)             
+        eps = max(eps_end, eps_decay*eps) 
+        if np.mean(scores_window) >= 200.0:
+            show = True
+        if np.mean(scores_window)>=215.0:
+            env.close()
             break
-    # Update the target network, copying all weights and biases in DQN
-    if i_episode % TARGET_UPDATE == 0:
-        target_net.load_state_dict(policy_net.state_dict())
+        
+    return scores
 
-print('Complete')
-env.render()
-env.close()
-plt.ioff()
-plt.show()
+
+agent = Agent(state_size=8, action_size=4, seed=0)
+scores = train()
