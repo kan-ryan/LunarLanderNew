@@ -96,9 +96,7 @@ class ReplayMemory:
     def sample(self):
         """Randomly sample a batch of transitions"""
 
-        # # # # # # # # # # # # # # # # # # #
-        # !! No idea how this code works !! #
-        # # # # # # # # # # # # # # # # # # # 
+        # Get a random sample of transitions
         transitions = random.sample(self.memory, k=self.batch_size)
         states = torch.from_numpy(np.vstack([t.state for t in transitions if t is not None])).float().to(device)
         actions = torch.from_numpy(np.vstack([t.action for t in transitions if t is not None])).long().to(device)
