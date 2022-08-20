@@ -145,7 +145,7 @@ class Agent():
                 self.optimize(transitions, GAMMA)
 
     def get_action(self, state, eps=0.):
-        #Gets an action from the replay memory 
+        # Gets evaluate model and get an action 
 
         state = torch.from_numpy(state).float().unsqueeze(0).to(device)
         self.policy_net.eval()
@@ -153,7 +153,7 @@ class Agent():
             action_vals = self.policy_net(state)
         self.policy_net.train()
 
-        
+        # epsilon value check for epsilon greedy 
         if random.random() > eps:
             return np.argmax(action_vals.cpu().data.numpy())
         else:
