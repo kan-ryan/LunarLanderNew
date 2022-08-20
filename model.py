@@ -111,7 +111,7 @@ class ReplayMemory:
         return len(self.memory)
 
 class Agent():
-   
+    
 
     def __init__(self, state_size, action_size, seed):
         
@@ -119,8 +119,11 @@ class Agent():
         self.action_size = action_size
         self.seed = random.seed(seed)
 
-        
+        #Two Neural Networks for Temporal Difference Learning
+
+        #Policy Net
         self.policy_net = DQNModel(state_size, action_size, seed).to(device)
+        #Target Net
         self.target_net = DQNModel(state_size, action_size, seed).to(device)
         self.optimizer = optim.Adam(self.policy_net.parameters(), lr=LR)
 
@@ -130,7 +133,7 @@ class Agent():
         self.steps_done = 0
     
     def step(self, state, action, reward, next_state, done):
-        
+        #Take a step in the environment with a batch of transitions
         self.memory.add(state, action, reward, next_state, done)
         
        
@@ -142,7 +145,8 @@ class Agent():
                 self.optimize(transitions, GAMMA)
 
     def get_action(self, state, eps=0.):
-       
+        #Gets an action from the replay memory 
+
         state = torch.from_numpy(state).float().unsqueeze(0).to(device)
         self.policy_net.eval()
         with torch.no_grad():
@@ -208,7 +212,8 @@ def train(num_episodes=2000, max_timesteps=800, eps_start=1.0, eps_end=0.01, eps
             if done:
                 break 
         scores_window.append(score)      
-        scores.append(score)             
+        scores.append(score)
+        print(np.mean(scores_window))             
         eps = max(eps_end, eps_decay*eps) 
         if np.mean(scores_window) >= 200.0:
             show = True
