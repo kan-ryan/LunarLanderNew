@@ -191,7 +191,7 @@ class Agent():
 
 
 def train(num_episodes=2000, max_timesteps=800, eps_start=1.0, eps_end=0.01, eps_decay=0.995):
-  
+    # training the agent and opening the environment on screen once a certain reward is reached
     scores = []                       
     scores_window = deque(maxlen=100) 
     eps = eps_start                
@@ -201,7 +201,7 @@ def train(num_episodes=2000, max_timesteps=800, eps_start=1.0, eps_end=0.01, eps
         score = 0
     
         
-        for t in range(max_timesteps):
+        for j in range(max_timesteps):
             if show == True:    
                 env.render()
             action = agent.get_action(state, eps)
@@ -215,8 +215,12 @@ def train(num_episodes=2000, max_timesteps=800, eps_start=1.0, eps_end=0.01, eps
         scores.append(score)
         print(np.mean(scores_window))             
         eps = max(eps_end, eps_decay*eps) 
+        #set show env to True once a reward of 200 is reached
         if np.mean(scores_window) >= 200.0:
+            print(i)
+            print(j)
             show = True
+        #close the enviornment after a reward greater than 215 is reached
         if np.mean(scores_window)>=215.0:
             env.close()
             break
