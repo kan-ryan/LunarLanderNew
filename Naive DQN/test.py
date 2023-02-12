@@ -14,6 +14,6 @@ if sys.argv[1] == "train":
 else:
 
     agent = load_agent(sys.argv[2])
-    run_episodes(agent=agent, num_episodes=20, episode_time=30000, do_training=False)
+    run_episodes(agent=agent, num_episodes=100, episode_time=30000, do_training=False)
 
 

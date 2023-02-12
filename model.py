@@ -70,7 +70,6 @@ TARGET_UPDATE = 4       # frequency to update target net
 
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
-
 class ReplayMemory:
     """Replay Memory to save trained observation"""
 
@@ -213,6 +212,7 @@ def train(num_episodes=2000, max_timesteps=800, eps_start=1.0, eps_end=0.01, eps
                 break 
         scores_window.append(score)      
         scores.append(score)
+       
         print(np.mean(scores_window))             
         eps = max(eps_end, eps_decay*eps) 
         #set show env to True once a reward of 200 is reached

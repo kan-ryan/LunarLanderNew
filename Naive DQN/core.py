@@ -18,7 +18,10 @@ def run_episodes(num_episodes, agent, do_training, episode_time, epsilon=None):
 
             next_state, reward, done, info = env.step(action)
             next_state = digitize_state(next_state, 5)
-
+            print('episode:', end='')
+            print(i_episode)
+            print('reward:', end='')
+            print(reward)
             if do_training:
                 agent.update_q(state, action, next_state, reward, done) 
             if done:
